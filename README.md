@@ -110,9 +110,8 @@ impl Request {
 ## Installation
 Add following to your `Cargo.toml`:
 ```toml
-enum_common_fields = { git = "https://github.com/eliduvid/enum_common_fields.git" }
+enum_common_fields = "0.1.0" # Use latestvvjdllknigejgkeijv
 ```
-I am working on adding the library to crates.io.
 ## Usage
 ### Basic Usage
 Add `#[derive(EnumCommonFields)]` above your enum and `#[common_field(field_name: Type)]` after it for every common field you need to generate accessors for:
