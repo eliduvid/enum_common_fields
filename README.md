@@ -110,7 +110,7 @@ impl Request {
 ## Installation
 Add following to your `Cargo.toml`:
 ```toml
-enum_common_fields = "0.1.0" # Use latestvvjdllknigejgkeijv
+enum_common_fields = "0.2.0" # Use latestvvjdllknigejgkeijv
 ```
 ## Usage
 ### Basic Usage
