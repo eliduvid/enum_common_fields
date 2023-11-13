@@ -2,11 +2,16 @@
 name = "enum_common_fields"
 version = "0.1.0"
 edition = "2021"
+readme = "README.md"
+homepage = "https://github.com/eliduvid/enum_common_fields"
+repository = "https://github.com/eliduvid/enum_common_fields.git"
+description = "Macro for easy access to common fields of enums"
+categories = ["rust-patterns", "development-tools"]
+keywords = ["enum", "macros", "code-generation", "field-manipulation", "accessors"]
+license = "MIT"
 
 [lib]
 proc-macro = true
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 quote = "1"
