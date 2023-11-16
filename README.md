@@ -110,137 +110,10 @@ impl Request {
 ## Installation
 Add following to your `Cargo.toml`:
 ```toml
-enum_common_fields = "0.4.0" # Use latest
+enum_common_fields = "0.5.0"
 ```
 ## Usage
-### Basic Usage
-Add `#[derive(EnumCommonFields)]` above your enum and `#[common_field(field_name: Type)]` after it for every common field you need to generate accessors for:
-```rust
-use enum_common_fields::EnumCommonFields;
-
-struct VariantOne {
-    key: String
-}
-
-struct VariantTwo { 
-    key: String
-}
-
-#[derive(EnumCommonFields)]
-#[common_field(key: String)]
-enum MyEnum {
-    VariantOne(VariantOne),
-    VariantTwo(VariantTwo),
-}
-fn main () {
-    let my_enum = MyEnum::VariantOne (VariantOne { key: "Example".into() });
-    assert_eq!(my_enum.key(), "Example");
-}
-```
-You can add `mut` to `common_field` annotation to also generate `<field_name>_mut()` accessor that returns mutable reference and `own` to also add `into_<field_name>()` accessor that consumes original instance:
-```rust
-use enum_common_fields::EnumCommonFields;
-
-struct VariantOne {
-    key: String
-}
-
-struct VariantTwo {
-    key: String
-}
-
-#[derive(EnumCommonFields)]
-#[common_field(own key: String)] // Generates read-only, mutable and owning accessors
-enum MyEnum {
-    VariantOne(VariantOne),
-    VariantTwo(VariantTwo),
-}
-
-fn main() {
-    let mut my_enum = MyEnum::VariantOne(VariantOne { key: "Example".into() });
-    assert_eq!(my_enum.key(), "Example");
-
-    my_enum.key_mut().push_str(" Mutated"); // Mutable access
-    assert_eq!(my_enum.key(), "Example Mutated");
-    
-    let key: String = my_enum.into_key(); // Consuming MyEnum instance, and getting owned String instance
-    assert_eq!(key, "Example Mutated".to_string())
-}
-```
-### Modifiers
-`common_field` annotation without access modifier generates only immutable accessor.
-`mut_only` generates only mutable one, and `own_only` only owning one.
-`mut` generates both mutable and immutable accessors, and `own` (and it's alias `all`) generate both of those and also th owning one.
-If you need only mutable and owning accessor, or only immutable and owning you'll need to add more than one accessor per field:
-```rust
-struct VariantOne {
-    key: String
-}
-
-struct VariantTwo {
-    key: String
-}
-
-#[derive(EnumCommonFields)]
-#[common_field(key: String)] // Generate only immutable accessor
-#[common_field(own_only key: String)] // And only owning accessor
-enum MyEnum {
-    VariantOne(VariantOne),
-    VariantTwo(VariantTwo),
-}
-```
-### Renaming
-You can use `as getter_name` in the `common_field` annotation to rename generated function name. You can use `as` only in `common_field` annotations with modifiers that generate only one accessor (`own_only`/`mut_only`/no modifier). If you need to rename more than one accessor for one field you once more will need to add more than one annotation per field:
-```rust
-struct VariantOne {
-    key: String
-}
-
-struct VariantTwo {
-    key: String
-}
-
-#[derive(EnumCommonFields)]
-#[common_field(key as k: String)]
-#[common_field(mut_only key as k_mut: String)]
-#[common_field(own_only key as into_k: String)]
-enum MyEnum {
-    VariantOne(VariantOne),
-    VariantTwo(VariantTwo),
-}
-fn main() {
-    let mut my_enum = MyEnum::VariantOne(VariantOne { key: "Example".into() });
-    assert_eq!(my_enum.k(), "Example");
-
-    my_enum.k_mut().push_str(" Mutated"); // Mutable access
-    assert_eq!(my_enum.k(), "Example Mutated");
-
-    let key: String = my_enum.into_k(); // Consuming MyEnum instance, and getting owned String instance
-    assert_eq!(key, "Example Mutated".to_string())
-}
-```
-If you want, you can generate multiple accessors with different names for the same field:
-```rust
-#[derive(EnumCommonFields)]
-#[common_field(key: String)] // Generates accessor named key()
-#[common_field(key as k: String)] // Generates accessor named k()
-#[common_field(key as get_key: String)] // Generates accessor named get_key()
-enum MyEnum {
-    VariantOne(VariantOne),
-    VariantTwo(VariantTwo),
-}
-```
-## Limitations
-Does not support struct enums.
-```rust
-#[derive(EnumCommonFields)]
-#[common_field(key: String)] // Will not compile: "expected tuple struct or tuple variant, found struct variant `Self::VariantOne`"
-enum TestEnum {
-    VariantOne(VariantOne),
-    VariantTwo(VariantTwo),
-}
-```
-May add support for those in the future. Tuple enums support is not planned.
+See [the docs](https://docs.rs/enum_common_fields/latest/enum_common_fields/derive.EnumCommonFields.html) for a complete reference.
 ## Missing features
 There are some features that are implementable, but I'm not convinced that effort of adding them is worth it. So if you are one of the lucky few that has a real use-case for one of those, feel free to pester me in the issues.
 ### Bulk-renaming accessors
@@ -250,4 +123,4 @@ As of now, owning accessors are pretty limited. If you want to take ownership of
 ### Weird combinations of accessors with one annotation
 I just don't believe that somebody needs to generate only owning and mutable accessor for a field frequently enough to talk about it.
 ### Conversions
-As of now, only conversion that the macro performs are those from `Deref` and `DerefMut` traits. For example, you can use `str` as a type of read only accessor of `String` field. This way the accessor will return `&str`. But it does not call `into()` or any other conversions.
+As of now, only conversion that the macro performs are those from `Deref` and `DerefMut` traits. For example, you can use `str` as a type of ref accessors of `String` field. This way the accessors will return `&str` and `&mut str`. But it does not call `into()` or any other conversions.

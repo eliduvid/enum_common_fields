@@ -2,10 +2,10 @@ extern crate proc_macro;
 
 use proc_macro::TokenStream;
 use proc_macro2::Ident;
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::parse::discouraged::Speculative;
 use syn::parse::ParseStream;
-use syn::{parse_macro_input, DeriveInput, Meta, Token};
+use syn::{parse_macro_input, DataEnum, DeriveInput, Fields, Meta, Token};
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 enum GetterKind {
@@ -75,25 +75,187 @@ impl syn::parse::Parse for CommonField {
     }
 }
 
+#[derive(Clone)]
+struct EnumVariantInfo {
+    name: Ident,
+    is_struct: bool,
+}
+
+fn parse_enum_variants(enum_info: DataEnum) -> Vec<EnumVariantInfo> {
+    enum_info
+        .variants
+        .into_iter()
+        .map(|variant| EnumVariantInfo {
+            is_struct: match variant.fields {
+                Fields::Named(_) => true,
+                Fields::Unnamed(_) => false,
+                Fields::Unit => panic!(
+                    "Variant {} is a unit variant, which is not supported",
+                    variant.ident
+                ),
+            },
+            name: variant.ident,
+        })
+        .collect()
+}
+
 /// Macro to generate getters/setters for common fields in an enum.
 /// Meaning, that if every variant of your enum has some field,
-/// you could access it though field() and field_mut() accessors respectively.
+/// you could access it though field(), field_mut() or into_field() accessors respectively.
 ///
 /// For example if you have common field `key` of type String you'll use the macro like this:
-/// ```ignore
+/// ```
+/// use enum_common_fields::EnumCommonFields;
+///
 /// #[derive(EnumCommonFields)]
 /// #[common_field(mut key: String)]
 /// enum MyEnum {
+/// #   _V{ key: String }
 ///     // Some variants
 /// }
 /// ```
 /// and will have methods `.key()` and `.key_mut()` that return `&String` and `&mut String` respectively.
 /// If you don't want to create `.key_mut()` accessor, you can omit mut in the declaration like this:
-/// ```ignore
+/// ```
+/// # use enum_common_fields::EnumCommonFields;
 /// #[derive(EnumCommonFields)]
 /// #[common_field(key: String)]
 /// enum MyEnum {
+/// #   _V{ key: String }
 ///     // Some variants
+/// }
+/// ```
+/// Generated accessor functions contain only match statement on current enum instance
+/// and extraction of the field in each branch.
+///
+/// ### Basic Usage
+/// Add `#[derive(EnumCommonFields)]` above your enum and `#[common_field(field_name: Type)]` after it for every common field you need to generate accessors for:
+/// ```rust
+/// # use enum_common_fields::EnumCommonFields;
+/// struct VariantOne {
+///     key: String
+/// }
+///
+/// #[derive(EnumCommonFields)]
+/// #[common_field(key: String)]
+/// enum MyEnum {
+///     VariantOne(VariantOne),
+///     VariantTwo {
+///         key: String
+///     },
+/// }
+/// let my_enum = MyEnum::VariantOne (VariantOne { key: "Example".into() });
+/// assert_eq!(my_enum.key(), "Example");
+/// ```
+/// You can add `mut` to `common_field` annotation to also generate `<field_name>_mut()` accessor that returns mutable reference and `own` to also add `into_<field_name>()` accessor that consumes original instance:
+/// ```rust
+/// # use enum_common_fields::EnumCommonFields;
+///
+/// struct VariantTwo {
+///     key: String
+/// }
+///
+/// #[derive(EnumCommonFields)]
+/// #[common_field(own key: String)] // Generates read-only, mutable and owning accessors
+/// enum MyEnum {
+///     VariantOne {
+///         key: String
+///     },
+///     VariantTwo(VariantTwo),
+/// }
+///
+/// let mut my_enum = MyEnum::VariantOne { key: "Example".into() };
+/// assert_eq!(my_enum.key(), "Example");
+///
+/// my_enum.key_mut().push_str(" Mutated"); // Mutable access
+/// assert_eq!(my_enum.key(), "Example Mutated");
+///
+/// let key: String = my_enum.into_key(); // Consuming MyEnum instance, and getting owned String instance
+/// assert_eq!(key, "Example Mutated".to_string())
+/// ```
+/// As you can see, both struct variants and tuple variants with a single struct are supported.
+/// Enums with unit variants or mutlipe things in a tuple variant are not.
+/// ### Modifiers
+/// `common_field` annotation without access modifier generates only immutable accessor.
+/// `mut_only` generates only mutable one, and `own_only` only owning one.
+/// `mut` generates both mutable and immutable accessors, and `own` (and it's alias `all`) generate both of those and also the owning one.
+/// If you need only mutable and owning accessor, or only immutable and owning you'll need to add more than one accessor per field:
+/// ```rust
+/// # use enum_common_fields::EnumCommonFields;
+/// struct VariantOne {
+///     key: String
+/// }
+///
+/// struct VariantTwo {
+///     key: String
+/// }
+///
+/// #[derive(EnumCommonFields)]
+/// #[common_field(key: String)] // Generate only immutable accessor
+/// #[common_field(own_only key: String)] // And only owning accessor
+/// enum MyEnum {
+///     VariantOne(VariantOne),
+///     VariantTwo(VariantTwo),
+/// }
+/// ```
+/// ### Types
+/// Type in the `#[common_field]` annotation is used only as a return type of the accessor.
+/// So you if you generate only reference accessors (or you generate owning accessor in a different annotation)
+/// you can use type that `Deref`s from the original field type instead of it itself.
+/// Classic example is using `str` instead of `String` for reference accessors:
+/// ```rust
+/// # use enum_common_fields::EnumCommonFields;
+/// #[derive(EnumCommonFields)]
+/// #[common_field(mut key: str)]
+/// #[common_field(own_only key: String)]
+/// enum MyEnum {
+///     One { key: String }
+/// }
+/// let e = MyEnum::One { key: "k".to_string() };
+/// let key_ref = e.key(); // returns "k" as &str instead or &String
+/// let key_mut_ref = e.key_mut(); // returns "k" as &mut str instead or &mut String
+/// let key = e.into_key(); // consumes e and returns "k" as actual String
+/// ```
+/// ### Renaming
+/// You can use `as getter_name` in the `common_field` annotation to rename generated function name. You can use `as` only in `common_field` annotations with modifiers that generate only one accessor (`own_only`/`mut_only`/no modifier). If you need to rename more than one accessor for one field you once more will need to add more than one annotation per field:
+/// ```rust
+/// # use enum_common_fields::EnumCommonFields;
+/// struct VariantOne {
+///     key: String
+/// }
+///
+/// struct VariantTwo {
+///     key: String
+/// }
+///
+/// #[derive(EnumCommonFields)]
+/// #[common_field(key as k: String)]
+/// #[common_field(mut_only key as k_mut: String)]
+/// #[common_field(own_only key as into_k: String)]
+/// enum MyEnum {
+///     VariantOne(VariantOne),
+///     VariantTwo(VariantTwo),
+/// }
+///
+/// let mut my_enum = MyEnum::VariantOne(VariantOne { key: "Example".into() });
+/// assert_eq!(my_enum.k(), "Example");
+///
+/// my_enum.k_mut().push_str(" Mutated"); // Mutable access
+/// assert_eq!(my_enum.k(), "Example Mutated");
+///
+/// let key: String = my_enum.into_k(); // Consuming MyEnum instance, and getting owned String instance
+/// assert_eq!(key, "Example Mutated".to_string())
+/// ```
+/// If you want, you can generate multiple accessors with different names for the same field:
+/// ```rust
+/// # use enum_common_fields::EnumCommonFields;
+/// #[derive(EnumCommonFields)]
+/// #[common_field(key: String)] // Generates accessor named key()
+/// #[common_field(key as k: String)] // Generates accessor named k()
+/// #[common_field(key as get_key: String)] // Generates accessor named get_key()
+/// enum MyEnum {
+///     VariantOne { key: String, /* other fields */ },
+///     VariantTwo { key: String, /* other fields */ },
 /// }
 /// ```
 #[proc_macro_derive(EnumCommonFields, attributes(common_field))]
@@ -107,8 +269,8 @@ pub fn common_fields_derive(input: TokenStream) -> TokenStream {
     }
 
     let enum_name = ast.ident;
-    let variant_names: Vec<_> = match ast.data {
-        syn::Data::Enum(e) => e.variants.into_iter().map(|v| v.ident).collect(),
+    let variants: Vec<_> = match ast.data {
+        syn::Data::Enum(e) => parse_enum_variants(e),
         _ => panic!("EnumCommonFields can only be applied to enums"),
     };
 
@@ -124,54 +286,76 @@ pub fn common_fields_derive(input: TokenStream) -> TokenStream {
         if resulting_name.is_some() && kinds.len() != 1 {
             panic!("\"as getter_name\" syntax is supported only for single getter annotations (own_only, mut_only of immutable [no annotations])")
         }
-
         for kind in kinds {
             match kind {
                 GetterKind::ReadOnly => {
-                    let resulting_name =
-                        resulting_name.clone().unwrap_or_else(|| field_name.clone());
-                    stream.extend(quote! {
-                        impl #enum_name {
-                            pub fn #resulting_name(&self) -> &#field_type {
-                                match self {
-                                    #(Self::#variant_names(v) => &v.#field_name,)*
-                                }
-                            }
-                        }
-                    });
+                    stream.extend(generate_accessor(
+                        &enum_name,
+                        &variants,
+                        &field_name,
+                        &field_type,
+                        quote!(&),
+                        resulting_name.clone().unwrap_or_else(|| field_name.clone()),
+                    ));
                 }
                 GetterKind::Mutable => {
-                    let resulting_name = resulting_name.clone().unwrap_or_else(|| {
-                        Ident::new(&format!("{field_name}_mut"), field_name.span())
-                    });
-                    stream.extend(quote! {
-                        impl #enum_name {
-                            pub fn #resulting_name(&mut self) -> &mut #field_type {
-                                match self {
-                                    #(Self::#variant_names(v) => &mut v.#field_name,)*
-                                }
-                            }
-                        }
-                    });
+                    stream.extend(generate_accessor(
+                        &enum_name,
+                        &variants,
+                        &field_name,
+                        &field_type,
+                        quote!(&mut),
+                        resulting_name
+                            .clone()
+                            .unwrap_or_else(|| format_ident!("{field_name}_mut")),
+                    ));
                 }
                 GetterKind::Owning => {
-                    let resulting_name = resulting_name.clone().unwrap_or_else(|| {
-                        Ident::new(&format!("into_{field_name}"), field_name.span())
-                    });
-                    stream.extend(quote! {
-                        impl #enum_name {
-                            pub fn #resulting_name(self) -> #field_type {
-                                match self {
-                                    #(Self::#variant_names(v) => v.#field_name,)*
-                                }
-                            }
-                        }
-                    });
+                    stream.extend(generate_accessor(
+                        &enum_name,
+                        &variants,
+                        &field_name,
+                        &field_type,
+                        quote!(),
+                        resulting_name
+                            .clone()
+                            .unwrap_or_else(|| format_ident!("into_{field_name}")),
+                    ));
                 }
             }
         }
     }
     TokenStream::from(stream)
+}
+
+fn generate_accessor(
+    enum_name: &Ident,
+    variants: &Vec<EnumVariantInfo>,
+    field_name: &Ident,
+    field_type: &Ident,
+    ref_token: proc_macro2::TokenStream,
+    resulting_name: Ident,
+) -> proc_macro2::TokenStream {
+    let match_branches: Vec<_> = variants
+        .clone()
+        .iter()
+        .map(|EnumVariantInfo { name, is_struct }| {
+            if *is_struct {
+                quote!(Self::#name{#field_name, ..} => #field_name)
+            } else {
+                quote!(Self::#name(v) => #ref_token v.#field_name)
+            }
+        })
+        .collect();
+    quote! {
+        impl #enum_name {
+            pub fn #resulting_name(#ref_token self) -> #ref_token #field_type {
+                match self {
+                    #(#match_branches,)*
+                }
+            }
+        }
+    }
 }
 
 fn parse_common_fields_attributes(ast: &DeriveInput) -> Vec<CommonField> {
@@ -194,7 +378,6 @@ fn parse_common_fields_attributes(ast: &DeriveInput) -> Vec<CommonField> {
         })
         .collect()
 }
-
 
 #[cfg(test)]
 mod common_field_parsing_tests {
