@@ -211,7 +211,7 @@ fn parse_enum_variants(enum_info: DataEnum) -> Vec<EnumVariantInfo> {
 /// enum MyEnum {
 ///     One { key: String }
 /// }
-/// let e = MyEnum::One { key: "k".to_string() };
+/// let mut e = MyEnum::One { key: "k".to_string() };
 /// let key_ref = e.key(); // returns "k" as &str instead or &String
 /// let key_mut_ref = e.key_mut(); // returns "k" as &mut str instead or &mut String
 /// let key = e.into_key(); // consumes e and returns "k" as actual String
@@ -265,7 +265,7 @@ pub fn common_fields_derive(input: TokenStream) -> TokenStream {
     let common_fields = parse_common_fields_attributes(&ast);
 
     if common_fields.is_empty() {
-        panic!("EnumCommonFields requires at least one common_field annotation")
+        panic!("EnumCommonFields requires at least one #[common_field] annotation")
     }
 
     let enum_name = ast.ident;
@@ -273,6 +273,10 @@ pub fn common_fields_derive(input: TokenStream) -> TokenStream {
         syn::Data::Enum(e) => parse_enum_variants(e),
         _ => panic!("EnumCommonFields can only be applied to enums"),
     };
+
+    if variants.is_empty() {
+        return TokenStream::new();
+    }
 
     let mut stream = quote!();
 
@@ -284,7 +288,7 @@ pub fn common_fields_derive(input: TokenStream) -> TokenStream {
     } in common_fields
     {
         if resulting_name.is_some() && kinds.len() != 1 {
-            panic!("\"as getter_name\" syntax is supported only for single getter annotations (own_only, mut_only of immutable [no annotations])")
+            panic!("\"as getter_name\" syntax is supported only for single getter annotations (own_only, mut_only or immutable [no annotations])")
         }
         for kind in kinds {
             match kind {
