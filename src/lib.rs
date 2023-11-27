@@ -174,7 +174,7 @@ fn parse_enum_variants(enum_info: DataEnum) -> Vec<EnumVariantInfo> {
 /// assert_eq!(key, "Example Mutated".to_string())
 /// ```
 /// As you can see, both struct variants and tuple variants with a single struct are supported.
-/// Enums with unit variants or mutlipe things in a tuple variant are not.
+/// Enums with unit variants or multiple things in a tuple variant are not.
 /// ### Modifiers
 /// `common_field` annotation without access modifier generates only immutable accessor.
 /// `mut_only` generates only mutable one, and `own_only` only owning one.
