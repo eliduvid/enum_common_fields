@@ -5,7 +5,7 @@ use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::parse::discouraged::Speculative;
 use syn::parse::ParseStream;
-use syn::{parse_macro_input, DataEnum, DeriveInput, Fields, Meta, Token};
+use syn::{parse_macro_input, DataEnum, DeriveInput, Fields, Meta, Token, Type};
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 enum GetterKind {
@@ -52,7 +52,7 @@ impl GetterKind {
 struct CommonField {
     kinds: Vec<GetterKind>,
     field_name: Ident,
-    field_type: Ident,
+    field_type: Type,
     resulting_name: Option<Ident>, // Can have a value only if one function is generated
 }
 
@@ -334,14 +334,13 @@ pub fn common_fields_derive(input: TokenStream) -> TokenStream {
 
 fn generate_accessor(
     enum_name: &Ident,
-    variants: &Vec<EnumVariantInfo>,
+    variants: &[EnumVariantInfo],
     field_name: &Ident,
-    field_type: &Ident,
+    field_type: &Type,
     ref_token: proc_macro2::TokenStream,
     resulting_name: Ident,
 ) -> proc_macro2::TokenStream {
     let match_branches: Vec<_> = variants
-        .clone()
         .iter()
         .map(|EnumVariantInfo { name, is_struct }| {
             if *is_struct {
@@ -393,7 +392,7 @@ mod common_field_parsing_tests {
         let parsed: CommonField = syn::parse2(tokens).expect("Failed to parse");
 
         assert_eq!(parsed.field_name, "field1");
-        assert_eq!(parsed.field_type, "i32");
+        assert_eq!(parsed.field_type, parse_quote!(i32));
         assert_eq!(parsed.kinds, vec![GetterKind::ReadOnly]);
         assert!(parsed.resulting_name.is_none());
     }
@@ -405,8 +404,19 @@ mod common_field_parsing_tests {
 
         assert_eq!(parsed.field_name, "field1");
         assert_eq!(parsed.resulting_name.unwrap(), "custom_name");
-        assert_eq!(parsed.field_type, "i32");
+        assert_eq!(parsed.field_type, parse_quote!(i32));
         assert_eq!(parsed.kinds, vec![GetterKind::ReadOnly]);
+    }
+
+    #[test]
+    fn test_field_with_complex_type() {
+        let tokens = parse_quote! { field1: Option<(i32, [u8; 4])> };
+        let parsed: CommonField = syn::parse2(tokens).expect("Failed to parse");
+
+        assert_eq!(parsed.field_name, "field1");
+        assert_eq!(parsed.field_type, parse_quote!(Option<(i32, [u8; 4])>));
+        assert_eq!(parsed.kinds, vec![GetterKind::ReadOnly]);
+        assert!(parsed.resulting_name.is_none());
     }
 
     #[test]
@@ -415,7 +425,7 @@ mod common_field_parsing_tests {
         let parsed: CommonField = syn::parse2(tokens).expect("Failed to parse");
 
         assert_eq!(parsed.field_name, "field1");
-        assert_eq!(parsed.field_type, "i32");
+        assert_eq!(parsed.field_type, parse_quote!(i32));
         assert_eq!(
             parsed.kinds,
             vec![GetterKind::ReadOnly, GetterKind::Mutable]
@@ -429,7 +439,7 @@ mod common_field_parsing_tests {
         let parsed: CommonField = syn::parse2(tokens).expect("Failed to parse");
 
         assert_eq!(parsed.field_name, "field1");
-        assert_eq!(parsed.field_type, "i32");
+        assert_eq!(parsed.field_type, parse_quote!(i32));
         assert_eq!(parsed.kinds, vec![GetterKind::Owning]);
         assert!(parsed.resulting_name.is_none());
     }
@@ -440,7 +450,7 @@ mod common_field_parsing_tests {
         let parsed: CommonField = syn::parse2(tokens).expect("Failed to parse");
 
         assert_eq!(parsed.field_name, "field1");
-        assert_eq!(parsed.field_type, "i32");
+        assert_eq!(parsed.field_type, parse_quote!(i32));
         assert_eq!(
             parsed.kinds,
             vec![
@@ -494,7 +504,7 @@ mod attributes_parse_tests {
         let result = parse_common_fields_attributes(&input);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].field_name, "field1");
-        assert_eq!(result[0].field_type, "i32");
+        assert_eq!(result[0].field_type, parse_quote!(i32));
         assert_eq!(result[0].kinds, vec![GetterKind::ReadOnly]);
     }
 
@@ -514,11 +524,11 @@ mod attributes_parse_tests {
         assert_eq!(result.len(), 2);
 
         assert_eq!(result[0].field_name, "field1");
-        assert_eq!(result[0].field_type, "i32");
+        assert_eq!(result[0].field_type, parse_quote!(i32));
         assert_eq!(result[0].kinds, vec![GetterKind::ReadOnly]);
 
         assert_eq!(result[1].field_name, "field2");
-        assert_eq!(result[1].field_type, "String");
+        assert_eq!(result[1].field_type, parse_quote!(String));
         assert_eq!(
             result[1].kinds,
             vec![GetterKind::ReadOnly, GetterKind::Mutable]
@@ -540,7 +550,7 @@ mod attributes_parse_tests {
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].field_name, "field1");
         assert_eq!(result[0].clone().resulting_name.unwrap(), "custom_name");
-        assert_eq!(result[0].field_type, "i32");
+        assert_eq!(result[0].field_type, parse_quote!(i32));
         assert_eq!(result[0].kinds, vec![GetterKind::ReadOnly]);
     }
 
