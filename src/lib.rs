@@ -334,14 +334,13 @@ pub fn common_fields_derive(input: TokenStream) -> TokenStream {
 
 fn generate_accessor(
     enum_name: &Ident,
-    variants: &Vec<EnumVariantInfo>,
+    variants: &[EnumVariantInfo],
     field_name: &Ident,
     field_type: &Type,
     ref_token: proc_macro2::TokenStream,
     resulting_name: Ident,
 ) -> proc_macro2::TokenStream {
     let match_branches: Vec<_> = variants
-        .clone()
         .iter()
         .map(|EnumVariantInfo { name, is_struct }| {
             if *is_struct {
