@@ -315,3 +315,83 @@ fn test_mixed_variant_mutable_accessor() {
     test_enum_tuple.key_mut().push_str(" Accessor");
     assert_eq!(test_enum_tuple.key(), "Mutable Mixed Tuple Accessor");
 }
+
+#[test]
+fn test_complex_type_immutable_accessor() {
+    struct VariantOne {
+        data: Option<(i32, [u8; 4])>,
+    }
+    struct VariantTwo {
+        data: Option<(i32, [u8; 4])>,
+    }
+
+    #[derive(EnumCommonFields)]
+    #[common_field(data: Option<(i32, [u8; 4])>)]
+    enum TestEnum {
+        VariantOne(VariantOne),
+        _VariantTwo(VariantTwo),
+    }
+
+    let test_enum = TestEnum::VariantOne(VariantOne {
+        data: Some((42, [1, 2, 3, 4])),
+    });
+    assert_eq!(test_enum.data(), &Some((42, [1, 2, 3, 4])));
+}
+
+#[test]
+fn test_complex_type_mutable_accessor() {
+    struct VariantOne {
+        data: Option<(i32, [u8; 4])>,
+    }
+
+    #[derive(EnumCommonFields)]
+    #[common_field(mut data: Option<(i32, [u8; 4])>)]
+    enum TestEnum {
+        VariantOne(VariantOne),
+    }
+
+    let mut test_enum = TestEnum::VariantOne(VariantOne {
+        data: Some((42, [1, 2, 3, 4])),
+    });
+    if let Some((ref mut val, _)) = test_enum.data_mut() {
+        *val = 100;
+    }
+    assert_eq!(test_enum.data(), &Some((100, [1, 2, 3, 4])));
+}
+
+#[test]
+fn test_complex_type_owning_accessor() {
+    struct VariantOne {
+        data: Option<(i32, [u8; 4])>,
+    }
+
+    #[derive(EnumCommonFields)]
+    #[common_field(own data: Option<(i32, [u8; 4])>)]
+    enum TestEnum {
+        VariantOne(VariantOne),
+    }
+
+    let test_enum = TestEnum::VariantOne(VariantOne {
+        data: Some((42, [1, 2, 3, 4])),
+    });
+    let data: Option<(i32, [u8; 4])> = test_enum.into_data();
+    assert_eq!(data, Some((42, [1, 2, 3, 4])));
+}
+
+#[test]
+fn test_complex_type_struct_variant() {
+    #[derive(EnumCommonFields)]
+    #[common_field(mut data: Option<(i32, [u8; 4])>)]
+    enum TestEnum {
+        Variant { data: Option<(i32, [u8; 4])> },
+    }
+
+    let mut test_enum = TestEnum::Variant {
+        data: Some((42, [1, 2, 3, 4])),
+    };
+    assert_eq!(test_enum.data(), &Some((42, [1, 2, 3, 4])));
+    if let Some((ref mut val, _)) = test_enum.data_mut() {
+        *val = 200;
+    }
+    assert_eq!(test_enum.data(), &Some((200, [1, 2, 3, 4])));
+}
