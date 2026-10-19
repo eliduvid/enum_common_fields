@@ -107,11 +107,6 @@ impl Request {
     }
 }
 ```
-## Installation
-Add following to your `Cargo.toml`:
-```toml
-enum_common_fields = "0.7.0"
-```
 ## Usage
 See [the docs](https://docs.rs/enum_common_fields/latest/enum_common_fields/derive.EnumCommonFields.html) for a complete reference.
 ## Missing features
